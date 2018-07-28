@@ -11,24 +11,24 @@ class Cypher
 		Concerns\Relation;
 
 	/**
-	 * Current Model
-	 */
-	protected $model;
-
-	/**
 	 * The Neo4j Current Node Label
 	 */
 	protected $table;
 
 	/**
+	 * The Neo4j Current Node Label
+	 */
+	protected $model;
+
+	/**
 	 * The Neo4j query string
 	 */
-	protected $queryString;
+	protected $statement;
 
 	/**
 	 * The Neo4j query parameters
 	 */
-	protected $queryParam;
+	protected $bindings;
 
 	/**
 	 * The Graphaware ResultSet
@@ -36,30 +36,56 @@ class Cypher
 	protected $result;
 
 	/**
+	 * The Graphaware ResultSet
+	 */
+	protected $attributes = [];
+
+	/**
 	 * neo4j query
 	 */
-	public function query($queryString, $param = [])
+	public function query($statement, $bindings = [])
 	{
-		return $this->client->run($queryString, $param);
+		$this->statement = $statement;
+		$this->bindings = $bindings;
+
+		$this->setModel();
+
+		return $this;
 	}
 
 	/**
 	 * neo4j query
 	 */
-	public function rawQuery($model, $queryString, $param = [])
+	public function runQuery()
+	{
+		return $this->client->run($this->statement, $this->bindings);
+	}
+
+	/**
+	 * neo4j query
+	 */
+	public function setModel()
+	{
+        if (! isset($this->model)) {
+        	$model = 'App\\' . class_basename($this);
+			$this->model = new $model();
+        }
+	}
+
+	/**
+	 * neo4j query
+	 */
+	public function table($model)
 	{
 		$model = 'App\\' . $model;
 		$this->model = new $model();
 
-		$this->queryString = $queryString;
-		$this->queryParam = $param;
-
 		return $this;
 	}
 
-	public function rawFirst()
+	public function first()
 	{
-		$result = $this->query($this->queryString, $this->queryParam);
+		$result = $this->runQuery();
 
 		$attributes = $result->getRecord()->values()[0]->values();
 		$attributes['id'] = $result->getRecord()->values()[0]->identity();
@@ -67,11 +93,11 @@ class Cypher
 		return $this->model->newFromBuilder($attributes);
 	}
 
-	public function rawGet()
+	public function get()
 	{
-		$result = $this->query($this->queryString, $this->queryParam);
-
 		$models = [];
+
+		$result = $this->runQuery();
 
 		if (!$result->getRecords())
 			return Collection::make($models);
@@ -81,34 +107,6 @@ class Cypher
 			$attributes['id'] = $record->values()[0]->identity();
 
 			$models[] = $this->model->newFromBuilder($attributes);
-		}
-
-		return Collection::make($models);
-	}
-
-	public function first($result)
-	{
-		$class = 'App\\' . $this->table;
-
-		$attributes = $result->getRecord()->values()[0]->values();
-		$attributes['id'] = $result->getRecord()->values()[0]->identity();
-
-		return $this->model = (new $class())->newFromBuilder($attributes);
-	}
-
-	public function get($result)
-	{
-		$class = 'App\\' . $this->table;
-		$models = [];
-
-		if (!$result->getRecords())
-			return Collection::make($models);
-
-		foreach ($result->getRecords() as $record) {
-			$attributes = $record->values()[0]->values();
-			$attributes['id'] = $record->values()[0]->identity();
-
-			$models[] = $this->model = (new $class())->newFromBuilder($attributes);
 		}
 
 		return Collection::make($models);
